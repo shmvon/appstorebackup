@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 class BackupManager: ObservableObject {
     @Published var outdatedApps: [OutdatedApp] = []
@@ -312,32 +313,19 @@ class BackupManager: ObservableObject {
             let username = NSUserName()
             let appleScriptSource = "do shell script \"SUDO_UID=\(uid) SUDO_GID=\(gid) SUDO_USER=\(username) '\(masPath)' upgrade \(ids)\" with administrator privileges"
             
-            // Run NSAppleScript on the main thread so the authorization dialog
-            // appears in front of the app window (spawning osascript as a child
-            // process can cause the dialog to appear behind the window or not at all).
-            var scriptOutput: String = ""
-            var scriptError: String? = nil
-            DispatchQueue.main.sync {
-                var errorInfo: NSDictionary?
-                if let script = NSAppleScript(source: appleScriptSource) {
-                    let result = script.executeAndReturnError(&errorInfo)
-                    if let error = errorInfo {
-                        scriptError = error[NSAppleScript.errorMessage] as? String ?? "Unknown AppleScript error"
-                    } else {
-                        scriptOutput = result.stringValue ?? ""
-                    }
-                } else {
-                    scriptError = "Failed to create AppleScript object"
-                }
+            // Bring app to front so the osascript auth dialog appears visibly
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
             }
+            // Small delay to let activation take effect
+            Thread.sleep(forTimeInterval: 0.3)
             
-            if let errorMsg = scriptError {
-                self.appendLog("✗ Upgrade failed: \(errorMsg)\n")
-            } else {
-                if !scriptOutput.isEmpty {
-                    self.appendLog(scriptOutput + "\n")
-                }
+            let upgradeResult = self.runShell(command: "/usr/bin/osascript", arguments: ["-e", appleScriptSource], verbose: true)
+            
+            if upgradeResult.status == 0 {
                 self.appendLog("✓ Upgrade completed successfully!\n")
+            } else {
+                self.appendLog("✗ Upgrade failed (Status: \(upgradeResult.status))\n")
             }
             
             currentStep += 1.0
