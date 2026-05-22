@@ -308,8 +308,9 @@ class BackupManager: ObservableObject {
             self.appendLog("Requesting administrative privileges for App Store installation...\n")
             
             let uid = getuid()
+            let gid = getgid()
             let username = NSUserName()
-            let appleScript = "do shell script \"SUDO_UID=\(uid) SUDO_USER=\(username) '\(masPath)' upgrade \(ids)\" with administrator privileges"
+            let appleScript = "do shell script \"SUDO_UID=\(uid) SUDO_GID=\(gid) SUDO_USER=\(username) '\(masPath)' upgrade \(ids)\" with administrator privileges"
             let upgradeResult = self.runShell(command: "/usr/bin/osascript", arguments: ["-e", appleScript], verbose: true)
             
             if upgradeResult.status == 0 {
