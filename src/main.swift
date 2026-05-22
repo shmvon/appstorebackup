@@ -44,6 +44,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
         
         let appName = "AppStoreBackup"
+        
+        let aboutItem = NSMenuItem(
+            title: "About \(appName)",
+            action: #selector(AppDelegate.showAbout),
+            keyEquivalent: ""
+        )
+        aboutItem.target = self
+        appMenu.addItem(aboutItem)
+        appMenu.addItem(NSMenuItem.separator())
+        
         let quitItem = NSMenuItem(
             title: "Quit \(appName)",
             action: #selector(NSApplication.terminate(_:)),
@@ -75,6 +85,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         NSApp.mainMenu = mainMenu
     }
+    
+    @objc func showAbout() {
+        let alert = NSAlert()
+        alert.messageText = "AppStore Backup"
+        alert.informativeText = """
+            Version 1.0
+            © shmvon
+
+            Backup your App Store apps before updating them.
+
+            https://github.com/shmvon/appstorebackup
+            """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open on GitHub")
+        
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            if let url = URL(string: "https://github.com/shmvon/appstorebackup") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
 }
 
 // ----------------------------------------------------
@@ -103,7 +136,7 @@ struct ContentView: View {
             .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Custom Window Drag/Header Bar
+                // Custom Window Drag/Header Bar (reserves space for traffic lights on all screens)
                 HeaderBarView()
                 
                 // Screen Content Router
@@ -122,7 +155,9 @@ struct ContentView: View {
                         ProgressScreen(manager: manager, activeScreen: $activeScreen, title: title)
                     }
                 }
-                .padding(24)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+                .padding(.top, 16)
             }
         }
         .frame(minWidth: 700, minHeight: 480)
@@ -154,154 +189,158 @@ struct HomeView: View {
     @Binding var activeScreen: ActiveScreen
     
     var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            
-            // App Branding Header
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 80, height: 80)
-                        .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
-                    
-                    Image(systemName: "square.and.arrow.down.on.square.fill")
-                        .font(.system(size: 36))
-                        .foregroundColor(.white)
-                }
+        VStack(spacing: 0) {
+            // Centred branding + buttons occupying all available space
+            VStack(spacing: 32) {
+                Spacer()
                 
-                Text("App Store Backup")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                
-                Text("Backup your App Store applications before triggering updates.")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            
-            if !manager.isMasInstalled {
-                // Dependency Warning State
-                VStack(spacing: 16) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                            .font(.title2)
+                // App Branding Header
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 80, height: 80)
+                            .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
                         
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Missing Dependency")
-                                .font(.headline)
-                            Text("The Mac App Store Command Line Interface ('mas') is required.")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                        Image(systemName: "square.and.arrow.down.on.square.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(.white)
                     }
-                    .padding()
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                    )
                     
-                    if manager.isInstallingMas {
-                        VStack(spacing: 8) {
-                            ProgressView()
-                            Text("Installing 'mas' via Homebrew...")
+                    Text("App Store Backup")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                    
+                    Text("Backup your App Store applications before triggering updates.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                if !manager.isMasInstalled {
+                    // Dependency Warning State
+                    VStack(spacing: 16) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.title2)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Missing Dependency")
+                                    .font(.headline)
+                                Text("The Mac App Store Command Line Interface ('mas') is required.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        )
+                        
+                        if manager.isInstallingMas {
+                            VStack(spacing: 8) {
+                                ProgressView()
+                                Text("Installing 'mas' via Homebrew...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else if manager.isBrewInstalled {
+                            Button(action: {
+                                manager.installMas()
+                            }) {
+                                HStack {
+                                    Image(systemName: "arrow.down.to.line.circle.fill")
+                                    Text("Install 'mas' CLI via Homebrew")
+                                }
+                                .frame(width: 250)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        } else {
+                            Text("Please install 'mas-cli' or Homebrew manually.")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.red)
                         }
-                    } else if manager.isBrewInstalled {
+                    }
+                    .padding(.horizontal, 40)
+                } else {
+                    // Main Button Options
+                    HStack(spacing: 24) {
+                        // Update Button
                         Button(action: {
-                            manager.installMas()
+                            activeScreen = .updateList
+                            manager.scanOutdatedApps()
                         }) {
-                            HStack {
-                                Image(systemName: "arrow.down.to.line.circle.fill")
-                                Text("Install 'mas' CLI via Homebrew")
+                            VStack(spacing: 16) {
+                                Image(systemName: "arrow.clockwise.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.white)
+                                
+                                VStack(spacing: 4) {
+                                    Text("Update Apps")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    Text("Scan outdated apps and backup before upgrade")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .multilineTextAlignment(.center)
+                                }
                             }
-                            .frame(width: 250)
+                            .frame(width: 200, height: 120)
+                            .padding()
+                            .background(
+                                LinearGradient(colors: [Color.blue, Color.blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                    } else {
-                        Text("Please install 'mas-cli' or Homebrew manually.")
-                            .font(.caption)
-                            .foregroundColor(.red)
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // Delete Button
+                        Button(action: {
+                            activeScreen = .deleteList
+                            manager.scanBackups()
+                        }) {
+                            VStack(spacing: 16) {
+                                Image(systemName: "trash.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.white)
+                                
+                                VStack(spacing: 4) {
+                                    Text("Delete Backups")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    Text("Scan and remove existing app backups")
+                                        .font(.caption)
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .multilineTextAlignment(.center)
+                                }
+                            }
+                            .frame(width: 200, height: 120)
+                            .padding()
+                            .background(
+                                LinearGradient(colors: [Color.purple, Color.purple.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 40)
-            } else {
-                // Main Button Options
-                HStack(spacing: 24) {
-                    // Update Button
-                    Button(action: {
-                        activeScreen = .updateList
-                        manager.scanOutdatedApps()
-                    }) {
-                        VStack(spacing: 16) {
-                            Image(systemName: "arrow.clockwise.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(.white)
-                            
-                            VStack(spacing: 4) {
-                                Text("Update Apps")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                Text("Scan outdated apps and backup before upgrade")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                        .frame(width: 200, height: 120)
-                        .padding()
-                        .background(
-                            LinearGradient(colors: [Color.blue, Color.blue.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .cornerRadius(12)
-                        .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Delete Button
-                    Button(action: {
-                        activeScreen = .deleteList
-                        manager.scanBackups()
-                    }) {
-                        VStack(spacing: 16) {
-                            Image(systemName: "trash.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(.white)
-                            
-                            VStack(spacing: 4) {
-                                Text("Delete Backups")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                Text("Scan and remove existing app backups")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                        .frame(width: 200, height: 120)
-                        .padding()
-                        .background(
-                            LinearGradient(colors: [Color.purple, Color.purple.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .cornerRadius(12)
-                        .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
+                
+                Spacer()
             }
             
-            Spacer()
-            
-            // Diagnostics Status
+            // Diagnostics Status — pinned to bottom, always fully visible
             HStack(spacing: 16) {
                 StatusIndicator(title: "Brew Status", isActive: manager.isBrewInstalled)
                 StatusIndicator(title: "Mas CLI Status", isActive: manager.isMasInstalled)
             }
             .font(.caption)
+            .padding(.bottom, 8)
         }
     }
 }
