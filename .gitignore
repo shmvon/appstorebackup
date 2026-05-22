@@ -1,5 +1,5 @@
 .DS_Store
-AppStoreBackup.app/
+noAppStoreBackup.app/
 AppIcon.icns
 AppIcon.iconset/
 *.log
