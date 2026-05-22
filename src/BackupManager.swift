@@ -301,31 +301,90 @@ class BackupManager: ObservableObject {
                 self.currentStatus = "Upgrading selected apps (App Store)..."
             }
             
-            let ids = appsToUpdate.map { $0.id }.joined(separator: " ")
             let masPath = self.resolvedMasPath
+            let ids = appsToUpdate.map { $0.id }.joined(separator: " ")
             
             self.appendLog("----------------------------------------\n")
             self.appendLog("Upgrading via App Store CLI (Consolidated IDs: \(ids))...\n")
-            self.appendLog("Requesting administrative privileges for App Store installation...\n")
             
-            let uid = getuid()
-            let gid = getgid()
-            let username = NSUserName()
-            let appleScriptSource = "do shell script \"SUDO_UID=\(uid) SUDO_GID=\(gid) SUDO_USER=\(username) '\(masPath)' upgrade \(ids)\" with administrator privileges"
-            
-            // Bring app to front so the osascript auth dialog appears visibly
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
+            // Show native password dialog on the main thread.
+            // NSAlert.runModal() runs a nested event loop so the app stays
+            // responsive and DispatchQueue.main.sync does NOT deadlock.
+            var password: String? = nil
+            DispatchQueue.main.sync {
+                let alert = NSAlert()
+                alert.messageText = "Administrator Password Required"
+                alert.informativeText = "Enter your password to update App Store apps."
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "OK")
+                alert.addButton(withTitle: "Cancel")
+                
+                let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+                input.placeholderString = "Password"
+                alert.accessoryView = input
+                alert.window.initialFirstResponder = input
+                
+                let response = alert.runModal()
+                if response == .alertFirstButtonReturn {
+                    password = input.stringValue
+                }
             }
-            // Small delay to let activation take effect
-            Thread.sleep(forTimeInterval: 0.3)
             
-            let upgradeResult = self.runShell(command: "/usr/bin/osascript", arguments: ["-e", appleScriptSource], verbose: true)
-            
-            if upgradeResult.status == 0 {
-                self.appendLog("✓ Upgrade completed successfully!\n")
+            if let adminPassword = password, !adminPassword.isEmpty {
+                self.appendLog("Running elevated mas upgrade...\n")
+                
+                // Use sudo -S which reads the password from stdin.
+                // Real sudo automatically sets SUDO_UID/SUDO_GID/SUDO_USER
+                // so mas-cli can identify the calling user's App Store session.
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
+                var args = ["-S", masPath, "upgrade"]
+                args.append(contentsOf: appsToUpdate.map { $0.id })
+                process.arguments = args
+                
+                let inputPipe = Pipe()
+                let outputPipe = Pipe()
+                process.standardInput = inputPipe
+                process.standardOutput = outputPipe
+                process.standardError = outputPipe
+                
+                // Stream output to log in real-time
+                outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+                    let data = handle.availableData
+                    guard !data.isEmpty else { return }
+                    if let string = String(data: data, encoding: .utf8) {
+                        self?.appendLog(string)
+                    }
+                }
+                
+                do {
+                    try process.run()
+                    
+                    // Pipe password to sudo's stdin
+                    if let passwordData = (adminPassword + "\n").data(using: .utf8) {
+                        inputPipe.fileHandleForWriting.write(passwordData)
+                    }
+                    inputPipe.fileHandleForWriting.closeFile()
+                    
+                    process.waitUntilExit()
+                    
+                    // Clean up handler and read any remaining data
+                    outputPipe.fileHandleForReading.readabilityHandler = nil
+                    let remaining = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                    if !remaining.isEmpty, let str = String(data: remaining, encoding: .utf8) {
+                        self.appendLog(str)
+                    }
+                    
+                    if process.terminationStatus == 0 {
+                        self.appendLog("✓ Upgrade completed successfully!\n")
+                    } else {
+                        self.appendLog("✗ Upgrade failed (Status: \(process.terminationStatus))\n")
+                    }
+                } catch {
+                    self.appendLog("✗ Error running upgrade: \(error.localizedDescription)\n")
+                }
             } else {
-                self.appendLog("✗ Upgrade failed (Status: \(upgradeResult.status))\n")
+                self.appendLog("✗ Upgrade cancelled by user.\n")
             }
             
             currentStep += 1.0
