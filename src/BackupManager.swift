@@ -310,13 +310,34 @@ class BackupManager: ObservableObject {
             let uid = getuid()
             let gid = getgid()
             let username = NSUserName()
-            let appleScript = "do shell script \"SUDO_UID=\(uid) SUDO_GID=\(gid) SUDO_USER=\(username) '\(masPath)' upgrade \(ids)\" with administrator privileges"
-            let upgradeResult = self.runShell(command: "/usr/bin/osascript", arguments: ["-e", appleScript], verbose: true)
+            let appleScriptSource = "do shell script \"SUDO_UID=\(uid) SUDO_GID=\(gid) SUDO_USER=\(username) '\(masPath)' upgrade \(ids)\" with administrator privileges"
             
-            if upgradeResult.status == 0 {
-                self.appendLog("✓ Upgrade completed successfully!\n")
+            // Run NSAppleScript on the main thread so the authorization dialog
+            // appears in front of the app window (spawning osascript as a child
+            // process can cause the dialog to appear behind the window or not at all).
+            var scriptOutput: String = ""
+            var scriptError: String? = nil
+            DispatchQueue.main.sync {
+                var errorInfo: NSDictionary?
+                if let script = NSAppleScript(source: appleScriptSource) {
+                    let result = script.executeAndReturnError(&errorInfo)
+                    if let error = errorInfo {
+                        scriptError = error[NSAppleScript.errorMessage] as? String ?? "Unknown AppleScript error"
+                    } else {
+                        scriptOutput = result.stringValue ?? ""
+                    }
+                } else {
+                    scriptError = "Failed to create AppleScript object"
+                }
+            }
+            
+            if let errorMsg = scriptError {
+                self.appendLog("✗ Upgrade failed: \(errorMsg)\n")
             } else {
-                self.appendLog("✗ Upgrade failed (Status: \(upgradeResult.status))\n")
+                if !scriptOutput.isEmpty {
+                    self.appendLog(scriptOutput + "\n")
+                }
+                self.appendLog("✓ Upgrade completed successfully!\n")
             }
             
             currentStep += 1.0
