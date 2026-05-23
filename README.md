@@ -1,7 +1,8 @@
 # AppStoreBackup
+Backup your App Store apps before updating them.
 
 Because the macos App Store does not have versioning, use this app to make a backup copy of your apps before updating.
-
+Really useful if you are a OneDrive user and don't trust Microsoft. Also if you do.
 
 ## Installation
 
