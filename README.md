@@ -6,6 +6,6 @@ Really useful if you are a OneDrive user and don't trust Microsoft. Also if you 
 
 ## Installation
 
-Downnload or build the app.
+Just build the app with the bash script.
 
 The app will verify the installation of homebrew and mas (macos App Store CLI), as it is basically an interface for mas.
