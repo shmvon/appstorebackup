@@ -17,6 +17,7 @@ class BackupManager: ObservableObject {
     @Published var isInstallingMas: Bool = false
     
     private var resolvedMasPath: String = "mas"
+    private let backupSuffix = "-AppStoreBackup.app"
     
     // Struct representing an app that has updates available
     struct OutdatedApp: Identifiable, Hashable {
@@ -165,18 +166,41 @@ class BackupManager: ObservableObject {
                 let parts = idAndNamePart.components(separatedBy: .whitespaces)
                 guard parts.count >= 2 else { continue }
                 let appId = parts[0]
-                let appName = parts[1...].joined(separator: " ")
+                var appName = parts[1...].joined(separator: " ")
+                if let range = appName.range(of: "-AppStoreBackup", options: [.caseInsensitive]) {
+                    appName = String(appName[..<range.lowerBound])
+                }
                 
                 // Parse version part like "4.6.4 -> 4.7.2"
                 let versions = versionPart.components(separatedBy: "->")
                 let currentVer = versions.first?.trimmingCharacters(in: .whitespaces) ?? "unknown"
                 let newVer = versions.last?.trimmingCharacters(in: .whitespaces) ?? "unknown"
                 
-                // Find path via mdfind (excluding backup paths)
+                // Find path via mdfind, but never offer backup copies for update.
                 let pathResult = self.runShell(command: "/usr/bin/mdfind", arguments: ["kMDItemAppStoreAdamID == \(appId)"])
-                let paths = pathResult.output.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: .newlines)
-                let nonBackupPath = paths.first { !$0.contains("-AppStoreBackup") && !$0.isEmpty }
-                let finalPath = nonBackupPath ?? "/Applications/\(appName).app"
+                let paths = pathResult.output
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                let appPaths = paths.filter { !self.isBackupAppPath($0) }
+                let fallbackPath = "/Applications/\(appName).app"
+                var finalPath: String? = nil
+                if let firstNonBackup = appPaths.first {
+                    finalPath = firstNonBackup
+                } else if self.fileManagerExists(fallbackPath) && !self.isBackupAppPath(fallbackPath) {
+                    finalPath = fallbackPath
+                }
+                if let fp = finalPath, self.isBackupAppPath(fp) {
+                    finalPath = nil
+                }
+                
+                guard let finalPath else {
+                    if !silent {
+                        self.appendLog("Skipping \(appName): only AppStoreBackup copies were found.\n")
+                    }
+                    continue
+                }
                 
                 let app = OutdatedApp(id: appId, name: appName, currentVersion: currentVer, newVersion: newVer, path: finalPath)
                 apps.append(app)
@@ -214,9 +238,9 @@ class BackupManager: ObservableObject {
             do {
                 let items = try fileManager.contentsOfDirectory(atPath: applicationsPath)
                 for item in items {
-                    if item.hasSuffix("-AppStoreBackup.app") {
+                    if self.isBackupAppPath(item) {
                         let fullPath = "\(applicationsPath)/\(item)"
-                        let appName = item.replacingOccurrences(of: "-AppStoreBackup.app", with: "")
+                        let appName = item.replacingOccurrences(of: self.backupSuffix, with: "")
                         
                         // Get size using du -sh
                         let sizeResult = self.runShell(command: "/usr/bin/du", arguments: ["-sh", fullPath])
@@ -451,6 +475,15 @@ class BackupManager: ObservableObject {
         DispatchQueue.main.async {
             self.logs += text
         }
+    }
+    
+    private func isBackupAppPath(_ path: String) -> Bool {
+        let name = URL(fileURLWithPath: path).lastPathComponent
+        return name.hasSuffix(backupSuffix)
+    }
+    
+    private func fileManagerExists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
     }
     
     // Runs shell command and streams stdout/stderr in real-time if verbose is true, otherwise returns accumulated output.

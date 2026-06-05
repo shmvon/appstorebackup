@@ -17,9 +17,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         window.center()
-        window.title = "AppStore Backup Utility"
+        window.title = ""
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        if let appIcon = NSImage(named: "AppIcon") {
+            NSApp.applicationIconImage = appIcon
+        }
         window.contentView = NSHostingView(rootView: contentView)
         window.makeKeyAndOrderFront(nil)
         window.isReleasedWhenClosed = false
@@ -136,7 +139,8 @@ struct ContentView: View {
             .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Custom Window Drag/Header Bar (reserves space for traffic lights on all screens)
+                // Custom window header bar — extends behind the transparent titlebar
+                // so the title occupies the same space as the traffic lights.
                 HeaderBarView()
                 
                 // Screen Content Router
@@ -159,6 +163,7 @@ struct ContentView: View {
                 .padding(.bottom, 24)
                 .padding(.top, 16)
             }
+            .ignoresSafeArea(edges: .top)
         }
         .frame(minWidth: 700, minHeight: 480)
     }
@@ -169,15 +174,31 @@ struct ContentView: View {
 // ----------------------------------------------------
 struct HeaderBarView: View {
     var body: some View {
-        HStack {
-            Spacer()
-            Text("AppStore Backup Utility")
+        ZStack {
+            Text("AppStoreBackup")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.secondary)
-            Spacer()
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.85)
+                .allowsTightening(true)
+                .frame(maxWidth: .infinity)
         }
-        .frame(height: 28)
+        .frame(maxWidth: .infinity)
+        .frame(height: 38)
         .background(Color.black.opacity(0.1))
+    }
+}
+
+struct AppIconBadgeView: View {
+    let size: CGFloat
+    
+    var body: some View {
+        Image(nsImage: NSImage(named: "AppIcon") ?? NSApp.applicationIconImage)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: size, height: size)
+            .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -196,16 +217,7 @@ struct HomeView: View {
                 
                 // App Branding Header
                 VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 80, height: 80)
-                            .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
-                        
-                        Image(systemName: "square.and.arrow.down.on.square.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(.white)
-                    }
+                    AppIconBadgeView(size: 80)
                     
                     Text("App Store Backup")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -467,8 +479,9 @@ struct UpdateListView: View {
                         .buttonStyle(.bordered)
                     }
                 } else {
-                    List {
-                        ForEach(filteredApps) { app in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
                             HStack(spacing: 12) {
                                 Toggle("", isOn: Binding(
                                     get: { app.isSelected },
@@ -502,12 +515,18 @@ struct UpdateListView: View {
                                 }
                                 .font(.system(size: 12))
                             }
-                            .padding(.vertical, 4)
-                            Divider()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            
+                            if index < filteredApps.count - 1 {
+                                Divider()
+                                    .padding(.leading, 68)
+                            }
                         }
                     }
-                    .listStyle(PlainListStyle())
                     .background(Color.clear)
+                    }
                 }
             }
             .frame(maxHeight: .infinity)
@@ -648,8 +667,9 @@ struct DeleteListView: View {
                         .buttonStyle(.bordered)
                     }
                 } else {
-                    List {
-                        ForEach(filteredBackups) { backup in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(filteredBackups.enumerated()), id: \.element.id) { index, backup in
                             HStack(spacing: 12) {
                                 Toggle("", isOn: Binding(
                                     get: { backup.isSelected },
@@ -675,12 +695,18 @@ struct DeleteListView: View {
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                             }
-                            .padding(.vertical, 4)
-                            Divider()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            
+                            if index < filteredBackups.count - 1 {
+                                Divider()
+                                    .padding(.leading, 68)
+                            }
                         }
                     }
-                    .listStyle(PlainListStyle())
                     .background(Color.clear)
+                    }
                 }
             }
             .frame(maxHeight: .infinity)

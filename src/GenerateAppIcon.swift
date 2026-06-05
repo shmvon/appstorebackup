@@ -50,8 +50,16 @@ func createIconImage(size: CGFloat) -> NSImage {
 }
 
 func savePNG(image: NSImage, path: String) {
-    guard let tiff = image.tiffRepresentation,
-          let rep = NSBitmapImageRep(data: tiff),
+    var proposedRect = NSRect(origin: .zero, size: image.size)
+    guard let cgImage = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) else {
+        print("Failed to get CGImage representation for \(path)")
+        return
+    }
+    
+    let rep = NSBitmapImageRep(cgImage: cgImage)
+    rep.size = image.size
+    
+    guard
           let png = rep.representation(using: .png, properties: [:]) else {
         print("Failed to get PNG representation for \(path)")
         return
@@ -94,8 +102,13 @@ process.arguments = ["-c", "icns", iconsetDir, "-o", "AppIcon.icns"]
 do {
     try process.run()
     process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        print("iconutil failed with status \(process.terminationStatus)")
+        exit(1)
+    }
 } catch {
     print("Failed running iconutil: \(error.localizedDescription)")
+    exit(1)
 }
 
 // Cleanup

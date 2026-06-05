@@ -1,5 +1,16 @@
 .DS_Store
-noAppStoreBackup.app/
-AppIcon.icns
-AppIcon.iconset/
 *.log
+
+# Build artifacts
+AppStoreBackup*.app/
+AppIcon.icns
+!src/AppIcon.icns
+AppIcon.iconset/
+
+# Swift build cache
+.build/
+Package.resolved
+
+# Custom ignored folders
+Ignore/
+.antigravitycli/
